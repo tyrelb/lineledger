@@ -7,7 +7,7 @@
         <div class="flex min-h-svh flex-col items-center gap-6 p-4 md:p-8">
             <a href="{{ route('home') }}" class="flex items-center gap-2 font-medium" wire:navigate>
                 <x-app-logo-icon class="h-10 w-auto" />
-                <span class="sr-only">{{ config('app.name', 'Ledger') }}</span>
+                <span class="sr-only">Alternatives</span>
             </a>
 
             <div class="w-full max-w-5xl">

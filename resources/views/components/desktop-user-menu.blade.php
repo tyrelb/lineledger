@@ -1,15 +1,8 @@
 @props(['showCompany' => true])
 
-@php($supportUnread = auth()->user()->unreadSupportRepliesCount())
-
 <flux:dropdown position="bottom" align="start">
     <button type="button" class="group flex w-full items-center rounded-lg p-1 hover:bg-muted" data-test="sidebar-menu-button">
-        <div class="relative">
-            <flux:avatar :initials="auth()->user()->initials()" size="sm" />
-            @if ($supportUnread)
-                <span class="absolute -end-0.5 -top-0.5 size-2.5 rounded-full bg-sky-500 ring-2 ring-sidebar" data-test="support-unread-indicator"></span>
-            @endif
-        </div>
+        <flux:avatar :initials="auth()->user()->initials()" size="sm" />
         <div class="in-data-flux-sidebar-collapsed-desktop:hidden mx-2 grid flex-1 text-start text-sm leading-tight">
             <span class="truncate font-medium text-muted-foreground group-hover:text-foreground">{{ auth()->user()->name }}</span>
             @if($showCompany && auth()->user()->currentCompany)
@@ -34,12 +27,6 @@
         <flux:menu.radio.group>
             <flux:menu.item :href="route('docs.getting-started')" icon="book-open" wire:navigate>
                 {{ __('Documentation') }}
-            </flux:menu.item>
-            <flux:menu.item :href="route('support.index')" icon="lifebuoy" wire:navigate data-test="support-link">
-                {{ __('Support') }}
-                @if ($supportUnread)
-                    <flux:badge size="sm" color="sky" class="ms-auto">{{ $supportUnread }}</flux:badge>
-                @endif
             </flux:menu.item>
             <flux:menu.item :href="route('profile.edit')" icon="cog" wire:navigate>
                 {{ __('Settings') }}

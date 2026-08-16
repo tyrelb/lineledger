@@ -1,1 +1,2 @@
-<img src="/logo/line-ledger-logo.png" alt="{{ config('app.name', 'Ledger') }}" {{ $attributes }} />
+<img src="/logo/alternatives-logo.png" alt="Alternatives" {{ $attributes->merge(['class' => 'dark:hidden']) }} />
+<img src="/logo/alternatives-logo-dark.png" alt="Alternatives" {{ $attributes->merge(['class' => 'hidden dark:block']) }} />

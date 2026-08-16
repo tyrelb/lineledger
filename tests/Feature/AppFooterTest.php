@@ -2,47 +2,42 @@
 
 use App\Models\User;
 
-test('the dashboard surfaces the license and source links', function () {
-    $user = User::factory()->create();
-
-    $response = $this
-        ->actingAs($user)
-        ->get(route('dashboard'));
-
-    $response->assertOk();
-    $response->assertSeeText('AGPL-3.0');
-    $response->assertSee('https://www.gnu.org/licenses/agpl-3.0.html', false);
-    $response->assertSee('https://github.com/lineledger/lineledger', false);
-});
-
-test('the footer names the operating company', function () {
+test('the dashboard footer names the operating company', function () {
     $user = User::factory()->create();
 
     $this
         ->actingAs($user)
         ->get(route('dashboard'))
         ->assertOk()
-        ->assertSeeText('Local Foundry Inc.');
+        ->assertSeeText('Personal Alternative Funeral Services Limited');
 });
 
-test('the documentation pages surface the license and source links', function () {
+test('the documentation pages name the operating company', function () {
     $user = User::factory()->create();
 
-    $response = $this
+    $this
         ->actingAs($user)
-        ->get(route('docs.getting-started'));
-
-    $response->assertOk();
-    $response->assertSeeText('AGPL-3.0');
-    $response->assertSee('https://www.gnu.org/licenses/agpl-3.0.html', false);
-    $response->assertSee('https://github.com/lineledger/lineledger', false);
+        ->get(route('docs.getting-started'))
+        ->assertOk()
+        ->assertSeeText('Personal Alternative Funeral Services Limited');
 });
 
-test('the login page surfaces the license and source links', function () {
-    $response = $this->get(route('login'));
+test('the login page names the operating company', function () {
+    $this
+        ->get(route('login'))
+        ->assertOk()
+        ->assertSeeText('Personal Alternative Funeral Services Limited');
+});
 
-    $response->assertOk();
-    $response->assertSeeText('AGPL-3.0');
-    $response->assertSee('https://www.gnu.org/licenses/agpl-3.0.html', false);
-    $response->assertSee('https://github.com/lineledger/lineledger', false);
+test('the footer no longer carries the upstream license and source links', function () {
+    $user = User::factory()->create();
+
+    $this
+        ->actingAs($user)
+        ->get(route('dashboard'))
+        ->assertOk()
+        ->assertDontSeeText('AGPL-3.0')
+        ->assertDontSee('https://www.gnu.org/licenses/agpl-3.0.html', false)
+        ->assertDontSee('https://github.com/lineledger/lineledger', false)
+        ->assertDontSeeText('Local Foundry Inc.');
 });

@@ -95,17 +95,11 @@
 
             <flux:spacer />
 
-            @php($supportUnread = auth()->user()->unreadSupportRepliesCount())
             <flux:dropdown position="top" align="end">
-                <div class="relative">
-                    <flux:profile
-                        :initials="auth()->user()->initials()"
-                        icon-trailing="chevron-down"
-                    />
-                    @if ($supportUnread)
-                        <span class="absolute end-6 top-1 size-2.5 rounded-full bg-sky-500 ring-2 ring-background" data-test="support-unread-indicator-mobile"></span>
-                    @endif
-                </div>
+                <flux:profile
+                    :initials="auth()->user()->initials()"
+                    icon-trailing="chevron-down"
+                />
 
                 <flux:menu>
                     <flux:menu.radio.group>
@@ -129,12 +123,6 @@
                     <flux:menu.radio.group>
                         <flux:menu.item :href="route('docs.getting-started')" icon="book-open" wire:navigate>
                             {{ __('Documentation') }}
-                        </flux:menu.item>
-                        <flux:menu.item :href="route('support.index')" icon="lifebuoy" wire:navigate data-test="support-link-mobile">
-                            {{ __('Support') }}
-                            @if ($supportUnread)
-                                <flux:badge size="sm" color="sky" class="ms-auto">{{ $supportUnread }}</flux:badge>
-                            @endif
                         </flux:menu.item>
                         <flux:menu.item :href="route('profile.edit')" icon="cog" wire:navigate>
                             {{ __('Settings') }}

@@ -131,10 +131,11 @@ it('hides the admin support console from non-admins', function () {
     $this->get('/admin/support')->assertNotFound();
 });
 
-it('shows the in-app support link and drops the external ones', function () {
+it('keeps support reachable by URL but unlinked from the user menu', function () {
     $this->get(route('support.index'))
         ->assertOk()
-        ->assertSee('data-test="support-link"', false)
+        ->assertDontSee('data-test="support-link"', false)
+        ->assertDontSee('data-test="support-link-mobile"', false)
         ->assertDontSee('lineledger.com/requests')
         ->assertDontSee('lineledger.com/support');
 });
