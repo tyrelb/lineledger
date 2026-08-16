@@ -23,8 +23,6 @@
             </flux:toast.group>
         @endpersist
 
-        <x-geo-banner />
-
         @fluxScripts(['nonce' => Vite::cspNonce()])
     </body>
 </html>
