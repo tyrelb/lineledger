@@ -316,6 +316,9 @@ new #[Title('Credit memo')] class extends Component {
 
         $cheque->lines()->create([
             'account_id' => $ar->id,
+            // The AR line belongs to the credit memo's customer — the payee may be
+            // someone else by the time the operator reviews the draft.
+            'contact_id' => $this->creditMemo->contact_id,
             'description' => __('Refund of credit memo :no', ['no' => $this->creditMemo->credit_memo_no]),
             'amount_cents' => $amountCents,
             'line_order' => 0,

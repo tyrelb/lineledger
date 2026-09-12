@@ -28,7 +28,7 @@ new #[Title('Cheque')] class extends Component {
     public function mount(Company $company, Cheque $cheque): void
     {
         $this->company = $company;
-        $this->cheque = $cheque->load('lines.account', 'lines.taxCode', 'lines.secondaryTaxCode', 'bankAccount', 'payee', 'journalEntry');
+        $this->cheque = $cheque->load('lines.account', 'lines.contact', 'lines.taxCode', 'lines.secondaryTaxCode', 'bankAccount', 'payee', 'journalEntry');
     }
 
     public function uploadAttachments(AttachmentService $service): void
@@ -170,7 +170,14 @@ new #[Title('Cheque')] class extends Component {
             <tbody class="divide-y divide-border">
                 @foreach ($cheque->lines as $line)
                     <tr>
-                        <td class="px-4 py-2">{{ optional($line->account)->code }} — {{ optional($line->account)->name }}</td>
+                        <td class="px-4 py-2">
+                            {{ optional($line->account)->code }} — {{ optional($line->account)->name }}
+                            @if ($line->contact)
+                                {{-- Whose receivable / payable this line moves, which is not
+                                     necessarily who the cheque was made out to. --}}
+                                <span class="mt-0.5 block text-xs text-muted-foreground" data-test="cheque-line-contact">{{ $line->contact->display_name }}</span>
+                            @endif
+                        </td>
                         <td class="px-4 py-2 text-muted-foreground">{{ $line->description }}</td>
                         <td class="px-4 py-2 text-muted-foreground">
                             {{ optional($line->taxCode)->code }}
