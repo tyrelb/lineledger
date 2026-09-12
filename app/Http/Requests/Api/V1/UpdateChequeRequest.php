@@ -40,6 +40,16 @@ class UpdateChequeRequest extends FormRequest
             'payee_name' => ['required_without:payee_contact_id', 'nullable', 'string', 'max:255'],
             'memo' => ['nullable', 'string'],
 
+            // Snapshotted onto the cheque; omit it and the payee contact's
+            // billing address is used.
+            'payee_address' => ['sometimes', 'array'],
+            'payee_address.line1' => ['nullable', 'string', 'max:255'],
+            'payee_address.line2' => ['nullable', 'string', 'max:255'],
+            'payee_address.city' => ['nullable', 'string', 'max:255'],
+            'payee_address.region' => ['nullable', 'string', 'max:255'],
+            'payee_address.postal_code' => ['nullable', 'string', 'max:255'],
+            'payee_address.country' => ['nullable', 'string', 'size:2'],
+
             'lines' => ['required', 'array', 'min:1', 'max:1000'],
             'lines.*.account_id' => ['required', 'integer', $inCompany('accounts')],
             'lines.*.contact_id' => ['nullable', 'integer', $inCompany('contacts')],

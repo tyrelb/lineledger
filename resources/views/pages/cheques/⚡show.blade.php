@@ -7,6 +7,7 @@ use App\Models\Cheque;
 use App\Models\Company;
 use App\Services\AttachmentService;
 use App\Services\Posting\ChequePoster;
+use App\Support\Contacts\AddressLines;
 use App\Support\Contacts\ContactLinkResolver;
 use Flux\Flux;
 use Illuminate\Support\Facades\Auth;
@@ -62,6 +63,30 @@ new #[Title('Cheque')] class extends Component {
     }
 
     /**
+     * The cheque's own address snapshot, falling back to the payee's record for
+     * cheques written before the snapshot existed — the same rule the printed
+     * cheque follows.
+     *
+     * @return list<string>
+     */
+    #[Computed]
+    public function addressLines(): array
+    {
+        $snapshot = [
+            'line1' => $this->cheque->payee_line1,
+            'line2' => $this->cheque->payee_line2,
+            'city' => $this->cheque->payee_city,
+            'region' => $this->cheque->payee_region,
+            'postal_code' => $this->cheque->payee_postal_code,
+            'country' => $this->cheque->payee_country,
+        ];
+
+        return AddressLines::isEmpty($snapshot)
+            ? AddressLines::forContact($this->cheque->payee, $this->company)
+            : AddressLines::format($snapshot, $this->company);
+    }
+
+    /**
      * The linked payee's home page (statement, employee editor, or all-time
      * transactions), or null for a free-text payee or a viewer who cannot
      * reach that page's section — the name then renders as plain text.
@@ -104,6 +129,15 @@ new #[Title('Cheque')] class extends Component {
                 {{ $cheque->cheque_date->toDateString() }} &middot;
                 {{ $cheque->bankAccount->name }}
             </flux:subheading>
+
+            {{-- The address this cheque was mailed to, as printed on it. --}}
+            @if ($this->addressLines !== [])
+                <div class="mt-1 text-sm text-muted-foreground" data-test="cheque-payee-address">
+                    @foreach ($this->addressLines as $line)
+                        <div>{{ $line }}</div>
+                    @endforeach
+                </div>
+            @endif
             <div class="mt-2 hidden items-center gap-2 lg:flex">
                 @switch($cheque->status->value)
                     @case('draft') <flux:badge color="amber">{{ __('Draft') }}</flux:badge> @break

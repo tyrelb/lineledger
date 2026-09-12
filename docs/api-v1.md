@@ -199,6 +199,21 @@ have a posted state, and the HTTP verbs map onto it:
 | `POST /{resource}/{id}/post` | Posts it. | Reposts it. |
 | `DELETE /{resource}/{id}` | **Hard-deletes**, returns `204`. | **Voids** with a reversing journal entry, returns `200` and the voided document. |
 
+### Cheques: the mailing address
+
+`POST`/`PATCH /api/v1/cheques` accept an optional `payee_address` object —
+`line1`, `line2`, `city`, `region`, `postal_code`, `country` (a two-letter code):
+
+```json
+"payee_address": { "line1": "500 New Avenue", "city": "Winnipeg", "region": "MB", "postal_code": "R3C 1A1", "country": "CA" }
+```
+
+Omit it and the address defaults from `payee_contact_id`'s billing address.
+Either way it is **snapshotted onto the cheque**, so editing the contact later
+never changes a cheque already written, and it is what prints on the cheque. The
+response echoes it back under `data.payee_address`. Updating the contact's own
+record is a separate call to `/api/v1/vendors/{id}` or `/customers/{id}`.
+
 Two consequences worth designing around:
 
 - **`DELETE` is not idempotent in the usual sense.** On a posted document it writes

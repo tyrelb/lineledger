@@ -29,6 +29,14 @@ class ChequeResource extends JsonResource
             'status' => $this->status?->value,
             'posted_at' => optional($this->posted_at)->toIso8601String(),
             'journal_entry_id' => $this->journal_entry_id,
+            'payee_address' => [
+                'line1' => $this->payee_line1,
+                'line2' => $this->payee_line2,
+                'city' => $this->payee_city,
+                'region' => $this->payee_region,
+                'postal_code' => $this->payee_postal_code,
+                'country' => $this->payee_country,
+            ],
             'lines' => $this->lines->map(fn ($line) => [
                 'id' => $line->id,
                 'account_id' => $line->account_id,
