@@ -220,3 +220,41 @@ it('accepts an unattributed Accounts Receivable line on a draft', function () {
         ->assertCreated()
         ->assertJsonPath('data.status', ChequeStatus::Draft->value);
 });
+
+/**
+ * The mailing address is snapshotted onto the cheque: an explicit payee_address
+ * wins, and omitting it defaults from the payee contact's billing address.
+ */
+it('stores an explicit payee address and echoes it back', function () {
+    $response = $this->withHeaders(chequeAuthHeader())->postJson('/api/v1/cheques', chequePayload([
+        'payee_address' => [
+            'line1' => '500 New Avenue',
+            'city' => 'Winnipeg',
+            'region' => 'MB',
+            'postal_code' => 'R3C 1A1',
+            'country' => 'ca',
+        ],
+    ]));
+
+    $response->assertCreated()
+        ->assertJsonPath('data.payee_address.line1', '500 New Avenue')
+        ->assertJsonPath('data.payee_address.country', 'CA');
+
+    expect(Cheque::query()->firstOrFail()->payee_city)->toBe('Winnipeg');
+});
+
+it('defaults the payee address from the linked contact', function () {
+    app()->instance('current_company', $this->company);
+    $vendor = Contact::factory()->vendor()->create([
+        'company_id' => $this->company->id,
+        'billing_line1' => '12 Old Street',
+        'billing_city' => 'Brandon',
+    ]);
+    app()->forgetInstance('current_company');
+
+    $this->withHeaders(chequeAuthHeader())
+        ->postJson('/api/v1/cheques', chequePayload(['payee_contact_id' => $vendor->id]))
+        ->assertCreated()
+        ->assertJsonPath('data.payee_address.line1', '12 Old Street')
+        ->assertJsonPath('data.payee_address.city', 'Brandon');
+});
