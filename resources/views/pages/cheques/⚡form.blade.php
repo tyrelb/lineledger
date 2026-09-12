@@ -6,6 +6,7 @@ use App\Enums\AccountSubtype;
 use App\Enums\AccountType;
 use App\Enums\ChequeStatus;
 use App\Exceptions\Posting\PeriodLockedException;
+use App\Livewire\Concerns\GuardsEditLockedForm;
 use App\Livewire\Concerns\ManagesLineContacts;
 use App\Livewire\Concerns\ManagesPayeeCombo;
 use App\Models\Account;
@@ -26,6 +27,7 @@ use App\Support\Banking\LastBankAccount;
 use App\Support\Contacts\AddressLines;
 use App\Support\Money;
 use Flux\Flux;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -38,6 +40,7 @@ use Livewire\WithFileUploads;
 
 new #[Title('Cheque')] class extends Component
 {
+    use GuardsEditLockedForm;
     use ManagesLineContacts;
     // clearPayee is extended below to clear the address with the payee; the
     // trait's own version is aliased so the override can still call it.
@@ -95,6 +98,11 @@ new #[Title('Cheque')] class extends Component
 
     #[Url(as: 'from')]
     public ?int $duplicateFromId = null;
+
+    protected function editLockRecord(): ?Model
+    {
+        return $this->cheque;
+    }
 
     public function mount(Company $company, ?Cheque $cheque = null): void
     {
@@ -588,8 +596,10 @@ new #[Title('Cheque')] class extends Component
         $this->addressWriteBackAnswered = true;
         Flux::modal('cheque-address-writeback')->close();
 
+        // While someone is editing the payee's record, skip only the write-back
+        // (the guard toasts who) — the cheque still saves with its own address.
         if ($updateContact && $contact = $this->selectedPayee) {
-            app(UpdateContactAddress::class)->handle($contact, $this->payeeAddressInput());
+            $this->guardEditLockedWrite($contact, fn () => app(UpdateContactAddress::class)->handle($contact, $this->payeeAddressInput()));
             unset($this->selectedPayee);
         }
 
@@ -862,6 +872,9 @@ new #[Title('Cheque')] class extends Component
 }; ?>
 
 <section class="w-full">
+    @if ($editLockBlocked) <x-edit-lock.blocked :lock="$this->editLockView" /> @else
+    <x-edit-lock.status :lock="$this->editLockView" />
+
     @php($j = $company->jurisdiction)
     <flux:heading size="xl" level="1" class="mb-6">{{ $cheque?->id ? $j->chequeLabel('edit') : $j->chequeLabel('write') }}</flux:heading>
 
@@ -1161,4 +1174,5 @@ new #[Title('Cheque')] class extends Component
             </div>
         </div>
     </flux:modal>
+    @endif
 </section>

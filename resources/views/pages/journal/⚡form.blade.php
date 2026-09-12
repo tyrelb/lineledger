@@ -7,6 +7,7 @@ use App\Enums\AuditAction;
 use App\Exceptions\Posting\PeriodLockedException;
 use App\Exceptions\Posting\ReconciliationLockedException;
 use App\Exceptions\Posting\UnbalancedJournalException;
+use App\Livewire\Concerns\GuardsEditLockedForm;
 use App\Livewire\Concerns\ManagesLineContacts;
 use App\Models\Account;
 use App\Models\Classification;
@@ -25,6 +26,7 @@ use App\Support\Reporting\SourceLinkResolver;
 use App\Support\Money;
 use Carbon\CarbonImmutable;
 use Flux\Flux;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Validation\Rule;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Title;
@@ -33,6 +35,7 @@ use Livewire\Component;
 
 new #[Title('Journal entry')] class extends Component
 {
+    use GuardsEditLockedForm;
     use ManagesLineContacts;
 
     public Company $company;
@@ -76,6 +79,11 @@ new #[Title('Journal entry')] class extends Component
      * @var array<int, array{account_id: ?int, contact_id: ?int, contact_query: string, contact_creating: bool, new_contact_name: string, debit: string, credit: string, memo: ?string, tax_code_id: ?int, class_id: ?int, location_id: ?int}>
      */
     public array $lines = [];
+
+    protected function editLockRecord(): ?Model
+    {
+        return $this->entry;
+    }
 
     public function mount(Company $company, ?JournalEntry $entry = null): void
     {
@@ -586,6 +594,9 @@ new #[Title('Journal entry')] class extends Component
 }; ?>
 
 <section class="w-full">
+    @if ($editLockBlocked) <x-edit-lock.blocked :lock="$this->editLockView" /> @else
+    <x-edit-lock.status :lock="$this->editLockView" />
+
     <flux:heading size="xl" level="1" class="mb-6">{{ $entry?->id ? __('Edit journal entry') : __('New journal entry') }}</flux:heading>
 
     @if ($linesLocked)
@@ -850,4 +861,5 @@ new #[Title('Journal entry')] class extends Component
             </div>
         </form>
     </flux:modal>
+    @endif
 </section>

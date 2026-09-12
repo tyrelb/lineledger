@@ -2,6 +2,8 @@
 
 use App\Enums\AccountSubtype;
 use App\Enums\ChequeStatus;
+use App\Livewire\Attributes\GuardsEditLock;
+use App\Livewire\Concerns\ShowsEditLock;
 use App\Models\Attachment;
 use App\Models\Cheque;
 use App\Models\Company;
@@ -10,6 +12,7 @@ use App\Services\Posting\ChequePoster;
 use App\Support\Contacts\AddressLines;
 use App\Support\Contacts\ContactLinkResolver;
 use Flux\Flux;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Title;
@@ -17,6 +20,7 @@ use Livewire\Component;
 use Livewire\WithFileUploads;
 
 new #[Title('Cheque')] class extends Component {
+    use ShowsEditLock;
     use WithFileUploads;
 
     public Company $company;
@@ -25,6 +29,11 @@ new #[Title('Cheque')] class extends Component {
 
     /** @var array<int, mixed> */
     public array $newAttachments = [];
+
+    protected function editLockRecord(): ?Model
+    {
+        return $this->cheque;
+    }
 
     public function mount(Company $company, Cheque $cheque): void
     {
@@ -99,6 +108,7 @@ new #[Title('Cheque')] class extends Component {
             : null;
     }
 
+    #[GuardsEditLock]
     public function void(ChequePoster $poster): void
     {
         try {
@@ -115,6 +125,8 @@ new #[Title('Cheque')] class extends Component {
 }; ?>
 
 <section class="w-full">
+    <x-edit-lock.banner :lock="$this->editLockBanner" />
+
     @php($j = $company->jurisdiction)
     <div class="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
