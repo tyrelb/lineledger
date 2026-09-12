@@ -1,7 +1,15 @@
 import './charts.js';
 import { evaluateAmountExpression, isAmountExpression, roundHalfUp } from './amount-expression.js';
+import { editLockBlockedPoller, editLockKeeper } from './edit-lock.js';
 
 document.addEventListener('alpine:init', () => {
+    /**
+     * Edit-lock keeper: renews an open edit page's lease on its record and
+     * releases it on leave. See ./edit-lock.js and <x-edit-lock.keeper>.
+     */
+    window.Alpine.data('editLockKeeper', editLockKeeper);
+    window.Alpine.data('editLockBlockedPoller', editLockBlockedPoller);
+
     /**
      * In-cell money calculator for amount fields. Typing an expression such as
      * "1050+52.50", "100*1.13" or "250/4" surfaces a running "tape" of each

@@ -199,6 +199,11 @@ have a posted state, and the HTTP verbs map onto it:
 | `POST /{resource}/{id}/post` | Posts it. | Reposts it. |
 | `DELETE /{resource}/{id}` | **Hard-deletes**, returns `204`. | **Voids** with a reversing journal entry, returns `200` and the voided document. |
 
+`PATCH`/`PUT`, `DELETE` and `POST /{resource}/{id}/{action}` on an existing record
+return **`423`** while someone has that record open for editing in the web app
+(bank reconciliations, stock adjustments and tax-return payments excepted) — see
+[Being edited (423)](#being-edited-423).
+
 ### Cheques: the mailing address
 
 `POST`/`PATCH /api/v1/cheques` accept an optional `payee_address` object —
@@ -223,6 +228,9 @@ Two consequences worth designing around:
   bill payments, journal entries, and deposits repost in place. Cheques, stock
   adjustments, and tax-return payments do **not** — editing one after posting
   returns `409`, and you should void and recreate.
+- **A record open in the web app is off-limits.** While a member is editing an
+  invoice, contact, account, … in LineLedger, writes to that record through the API
+  return `423` with a `Retry-After` header. Reads and creates are never affected.
 
 Posting is atomic with creation: if the post fails (locked period, unbalanced
 entry, zero total), the document the request just created is rolled back too.
@@ -343,6 +351,7 @@ Put your own reference in `memo` on create, then search it before retrying.
 | `404` | No such record **in this company** (also returned for a wrong-role contact). |
 | `409` | The operation conflicts with the document's state — already voided, or an edit to a posted document that can't repost. |
 | `422` | Validation failed, or the post was rejected (locked period, unbalanced, zero total, filed tax period). |
+| `423` | Someone is editing the record in the web app right now. Wait `Retry-After` seconds and try again. |
 | `429` | Rate limit exceeded. |
 | `500` | Unexpected server error. The message is deliberately generic. |
 
@@ -406,6 +415,39 @@ Triggers:
 
 The model class is never named, by design.
 
+### Being edited (`423`)
+
+LineLedger lets one person edit a record at a time. While a member has a record
+open in an edit form or edit dialog in the web app, the API refuses to change it:
+
+```http
+HTTP/1.1 423 Locked
+Retry-After: 87
+Content-Type: application/json
+
+{"message": "This invoice is being edited by someone else in LineLedger. Try again shortly."}
+```
+
+- **`Retry-After`** is the number of seconds left on the web user's current lease
+  (at least 1, at most 120 with the default settings). Their open page renews the
+  lease while they work, so the record may still be busy when it runs out.
+- **The message names the kind of record** (invoice, customer, vendor, employee,
+  account, …) and never the person editing it.
+- **Affected:** `PATCH`/`PUT` (update), `DELETE`, and every `POST /{resource}/{id}/{action}`
+  (`post`, `fulfill`, `cancel`, `refund`, `file`, `void`) on every resource in
+  [§3](#3-the-resource-map) **except** `bank-reconciliations`, `stock-adjustments` and
+  `tax-return-payments`, which edit locks don't cover and which never return `423`.
+  (A member can be working on a bank reconciliation in the web app at the same time
+  as your request — there the last write wins.)
+- **Never affected:** `GET` requests and creates (`POST /{resource}`). A new receipt
+  applied to an invoice that someone is editing still succeeds.
+- **Nothing is written** when you get a `423` — the request can be sent again unchanged.
+
+**What to do:** wait at least `Retry-After` seconds, then retry the same request a
+limited number of times. Don't loop tightly on it — a person may keep the record
+open for a while. If it's still locked after a few attempts, queue the change and
+come back later, or surface it to an operator.
+
 ---
 
 ## 7. Things v1 does **not** do
@@ -420,6 +462,9 @@ Intentional omissions — call them out if a coder asks.
 - **No cross-company access.** One key, one company, always. To integrate with
   several organizations, mint a key per organization.
 - **No key expiry.** Keys live until revoked.
+- **No way to override a web edit.** An API key can't take over a record someone is
+  editing in the web app, and it can't see who is editing — only an Owner or Admin
+  in the web app can take over. Retry after the `423`'s `Retry-After`.
 - **No true partial updates.** `PATCH` and `PUT` are the same operation: send the
   document's full payload. Required fields stay required on update, and for line
   documents `lines` is **required and replaces the entire set** — the existing lines
