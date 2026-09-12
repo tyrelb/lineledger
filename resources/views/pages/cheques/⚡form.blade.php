@@ -5,6 +5,7 @@ use App\Enums\AccountSubtype;
 use App\Enums\AccountType;
 use App\Enums\ChequeStatus;
 use App\Exceptions\Posting\PeriodLockedException;
+use App\Livewire\Concerns\ManagesLineContacts;
 use App\Livewire\Concerns\ManagesPayeeCombo;
 use App\Models\Account;
 use App\Models\Attachment;
@@ -19,6 +20,7 @@ use App\Rules\MoneyString;
 use App\Services\AttachmentService;
 use App\Services\Posting\ChequePoster;
 use App\Services\Posting\DocumentNumberGenerator;
+use App\Support\Accounting\ControlAccountRoles;
 use App\Support\Banking\LastBankAccount;
 use App\Support\Money;
 use Flux\Flux;
@@ -34,6 +36,7 @@ use Livewire\WithFileUploads;
 
 new #[Title('Cheque')] class extends Component
 {
+    use ManagesLineContacts;
     use ManagesPayeeCombo;
     use WithFileUploads;
 
@@ -54,7 +57,7 @@ new #[Title('Cheque')] class extends Component
     public string $memo = '';
 
     /**
-     * @var array<int, array{account_id: ?int, description: string, amount: string, tax_code_id: ?int, tax_override: string, class_id: ?int, location_id: ?int, auto_tax_cents: int, tax_cents: int, total: int}>
+     * @var array<int, array{account_id: ?int, contact_id: ?int, contact_query: string, contact_creating: bool, new_contact_name: string, description: string, amount: string, tax_code_id: ?int, tax_override: string, class_id: ?int, location_id: ?int, auto_tax_cents: int, tax_cents: int, total: int}>
      */
     public array $lines = [];
 
@@ -107,6 +110,7 @@ new #[Title('Cheque')] class extends Component
     {
         $this->lines = $cheque->lines->map(fn ($l) => [
             'account_id' => $l->account_id,
+            ...$this->emptyLineContactState($l->contact_id),
             'description' => $l->description ?? '',
             'amount' => Money::fromCents((int) $l->amount_cents)->toDecimalString(),
             'tax_code_id' => $l->tax_code_id,
@@ -222,11 +226,44 @@ new #[Title('Cheque')] class extends Component
     /**
      * Default the memo to the supplier's account number so it prints on the
      * cheque (QuickBooks behaviour). The user can still overwrite it.
+     *
+     * Also seeds any AR/AP line still missing a contact, so picking the payee
+     * after coding the line pre-fills it the same way coding the line after
+     * picking the payee does.
      */
     protected function afterPayeeSelected(Contact $contact): void
     {
         if ($this->memo === '' && $contact->account_no) {
             $this->memo = $contact->account_no;
+        }
+
+        foreach (array_keys($this->lines) as $i) {
+            $this->prefillLineContactFromPayee($i);
+        }
+    }
+
+    /**
+     * Seed a line's customer / vendor from the cheque's payee when the payee
+     * holds the role the line's account requires — the common case, where the
+     * cheque goes to the very customer or vendor whose balance it settles.
+     * Leaves the picker blank otherwise (paying a third party on a customer's
+     * behalf), and never overwrites a contact already chosen.
+     */
+    protected function prefillLineContactFromPayee(int $i): void
+    {
+        $role = $this->lineContactRole($i);
+
+        if ($role === null || ! empty($this->lines[$i]['contact_id']) || ! $this->payee_contact_id) {
+            return;
+        }
+
+        $holdsRole = Contact::query()
+            ->whereKey($this->payee_contact_id)
+            ->where(ControlAccountRoles::roleColumn($role), true)
+            ->exists();
+
+        if ($holdsRole) {
+            $this->lines[$i]['contact_id'] = (int) $this->payee_contact_id;
         }
     }
 
@@ -234,6 +271,7 @@ new #[Title('Cheque')] class extends Component
     {
         return [
             'account_id' => null, 'description' => '', 'amount' => '0.00',
+            ...$this->emptyLineContactState(),
             'tax_code_id' => null, 'secondary_tax_code_id' => null, 'tax_code_ids' => [], 'tax_override' => '', 'class_id' => null, 'location_id' => null,
             'auto_tax_cents' => 0, 'tax_cents' => 0, 'secondary_tax_cents' => 0, 'total' => 0,
         ];
@@ -275,11 +313,32 @@ new #[Title('Cheque')] class extends Component
 
         // Picking an account fills a blank tax code from the account's
         // default — never overwriting one already on the line.
-        if (str_ends_with($key, '.account_id') && $value && empty($this->lines[$i]['tax_code_id'])) {
-            $this->lines[$i]['tax_code_id'] = Account::find($value)?->default_tax_code_id;
+        if (str_ends_with($key, '.account_id')) {
+            if ($value && empty($this->lines[$i]['tax_code_id'])) {
+                $this->lines[$i]['tax_code_id'] = Account::find($value)?->default_tax_code_id;
+            }
+
+            // An AR/AP account needs a customer / vendor; anything else must not
+            // carry one, so a stale pick can't ride along on an expense line.
+            if ($this->lineContactRole($i) === null) {
+                $this->resetLineContactState($i);
+            } else {
+                $this->prefillLineContactFromPayee($i);
+            }
         }
 
         $this->recalcLine($i);
+    }
+
+    /**
+     * A cheque line carries money when its amount is non-zero; the tax columns
+     * are derived from it, so the amount alone decides.
+     *
+     * @param  array<string, mixed>  $line
+     */
+    protected function lineHasAmount(array $line): bool
+    {
+        return (Money::tryFromString((string) ($line['amount'] ?? ''))?->cents ?? 0) !== 0;
     }
 
     protected function recalcLine(int $i): void
@@ -325,7 +384,9 @@ new #[Title('Cheque')] class extends Component
             return;
         }
 
-        $this->cheque = app(SaveCheque::class)->handle($this->validatedChequeData(), $this->cheque);
+        // A draft writes nothing to the ledger, so there is nothing yet to
+        // mis-attribute: the AR/AP contact is only demanded at the post.
+        $this->cheque = app(SaveCheque::class)->handle($this->validatedChequeData(requireContacts: false), $this->cheque);
         $this->storePendingAttachments();
 
         Flux::toast(variant: 'success', text: __('Draft saved.'));
@@ -368,9 +429,12 @@ new #[Title('Cheque')] class extends Component
      * {@see SaveCheque} takes. Runs outside the save transaction so a
      * validation failure never opens one.
      *
+     * $requireContacts gates the Accounts Receivable / Accounts Payable rule:
+     * on at the post, off for a draft save.
+     *
      * @return array<string, mixed>
      */
-    protected function validatedChequeData(): array
+    protected function validatedChequeData(bool $requireContacts = true): array
     {
         $companyId = $this->company->id;
 
@@ -383,6 +447,7 @@ new #[Title('Cheque')] class extends Component
             'memo' => ['nullable', 'string'],
             'lines' => ['array', 'min:1'],
             'lines.*.account_id' => ['required', 'integer', Rule::exists('accounts', 'id')->where('company_id', $companyId)],
+            'lines.*.contact_id' => ['nullable', 'integer', Rule::exists('contacts', 'id')->where('company_id', $companyId)],
             'lines.*.amount' => ['required', 'string', new MoneyString],
             'lines.*.tax_code_id' => ['nullable', 'integer', Rule::exists('tax_codes', 'id')->where('company_id', $companyId)],
             'lines.*.secondary_tax_code_id' => ['nullable', 'integer', Rule::exists('tax_codes', 'id')->where('company_id', $companyId)],
@@ -396,6 +461,11 @@ new #[Title('Cheque')] class extends Component
             'payee_name.required' => __('Choose a payee, or add the name as an Other name.'),
         ]);
 
+        if ($requireContacts) {
+            $this->resolveNewLineContacts();
+            $this->validateLineContacts();
+        }
+
         return [
             'bank_account_id' => $validated['bank_account_id'],
             'cheque_no' => $validated['cheque_no'],
@@ -403,8 +473,13 @@ new #[Title('Cheque')] class extends Component
             'payee_contact_id' => $validated['payee_contact_id'] ?: null,
             'payee_name' => $validated['payee_name'],
             'memo' => $validated['memo'] ?: null,
-            'lines' => array_map(fn ($line) => [
+            'lines' => array_map(fn ($i, $line) => [
                 'account_id' => $line['account_id'],
+                // Only an AR/AP line keeps a contact — the account may have been
+                // changed after one was picked.
+                'contact_id' => $this->lineContactRole($i) !== null
+                    ? (($this->lines[$i]['contact_id'] ?? null) ?: null)
+                    : null,
                 'description' => $line['description'] ?? '',
                 'amount_cents' => Money::fromString($line['amount'])->cents,
                 'tax_code_id' => $line['tax_code_id'] ?? null,
@@ -414,7 +489,7 @@ new #[Title('Cheque')] class extends Component
                     : null,
                 'class_id' => $line['class_id'] ?? null,
                 'location_id' => $line['location_id'] ?? null,
-            ], $validated['lines']),
+            ], array_keys($validated['lines']), $validated['lines']),
         ];
     }
 
@@ -698,6 +773,36 @@ new #[Title('Cheque')] class extends Component
                                         <flux:select.option :value="$opt->id">{{ $opt->code }} — {{ $opt->name }}</flux:select.option>
                                     @endforeach
                                 </flux:select>
+
+                                {{-- An Accounts Receivable / Payable line needs its own customer
+                                     or vendor: the payee is who the cheque is made out to, which
+                                     is often not whose balance it settles. --}}
+                                @php($contactRole = $this->contactRequiringAccounts[(int) ($line['account_id'] ?? 0)] ?? null)
+                                @if ($contactRole === 'customer')
+                                    <x-line-contact-combo
+                                        :index="$i"
+                                        add-label="customer"
+                                        :placeholder="__('Search or add a customer…')"
+                                        :options="$this->lineContactOptions($i)"
+                                        :selected-id="$line['contact_id']"
+                                        :selected-name="$this->lineContactName($i)"
+                                        :query="$line['contact_query']"
+                                        :creating="$line['contact_creating']"
+                                        data-test="line-customer-combo"
+                                    />
+                                @elseif ($contactRole === 'vendor')
+                                    <x-line-contact-combo
+                                        :index="$i"
+                                        add-label="vendor"
+                                        :placeholder="__('Search or add a vendor…')"
+                                        :options="$this->lineContactOptions($i)"
+                                        :selected-id="$line['contact_id']"
+                                        :selected-name="$this->lineContactName($i)"
+                                        :query="$line['contact_query']"
+                                        :creating="$line['contact_creating']"
+                                        data-test="line-vendor-combo"
+                                    />
+                                @endif
                             </td>
                             <td class="block px-2 py-1 lg:table-cell lg:py-2">
                                 <span class="mb-1 block text-xs font-medium text-muted-foreground lg:hidden">{{ __('Description') }}</span>

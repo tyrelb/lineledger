@@ -352,6 +352,11 @@ Common causes:
   `deposit_to_account_id`). Every `*_id` is validated against the calling key's
   company — an id from another company is a validation error, not a 404.
 - `contact_id` exists but doesn't hold the required role (`is_customer = false`).
+- `lines.*.contact_id` missing or wrong-role on a line coded to the Accounts
+  Receivable / Accounts Payable control account (journal entries and cheques).
+  Those lines move a customer's or vendor's sub-ledger, so AR requires a
+  customer and AP a vendor. Checked only when the document is being posted —
+  a cheque sent with `"post": false` may leave it out.
 - `sales_rep_id` points at a contact that isn't an employee (`is_employee = false`).
 - `applications.*.invoice_id` doesn't belong to the same `contact_id`, or is in
   `draft` / `void` / `paid`.

@@ -32,6 +32,7 @@ class ChequeResource extends JsonResource
             'lines' => $this->lines->map(fn ($line) => [
                 'id' => $line->id,
                 'account_id' => $line->account_id,
+                'contact_id' => $line->contact_id,
                 'description' => $line->description,
                 'amount_cents' => (int) $line->amount_cents,
                 'tax_code_id' => $line->tax_code_id,

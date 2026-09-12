@@ -25,9 +25,13 @@ use Illuminate\Support\Facades\DB;
  *   payee_name:       ?string  (null → resolved from payee contact)
  *   memo:             ?string
  *   lines: array<int, array{
- *     account_id: int, description: ?string, amount_cents: int, tax_code_id: ?int,
- *     tax_override_cents: ?int, class_id: ?int, location_id: ?int
+ *     account_id: int, contact_id: ?int, description: ?string, amount_cents: int,
+ *     tax_code_id: ?int, tax_override_cents: ?int, class_id: ?int, location_id: ?int
  *   }>
+ *
+ * contact_id is the customer (Accounts Receivable line) or vendor (Accounts
+ * Payable line) whose sub-ledger the line moves — distinct from the header
+ * payee, and what ChequePoster stamps on that GL leg.
  *
  * tax_override_cents, when non-null, is the exact tax the user typed and wins
  * over the tax code's computed amount.
@@ -87,6 +91,7 @@ final class SaveCheque
 
                 $cheque->lines()->create([
                     'account_id' => $line['account_id'],
+                    'contact_id' => $line['contact_id'] ?? null,
                     'description' => $line['description'] ?? null,
                     'amount_cents' => $amountCents,
                     'tax_code_id' => $taxCode?->id,
