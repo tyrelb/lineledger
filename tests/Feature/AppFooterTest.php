@@ -41,3 +41,16 @@ test('the footer no longer carries the upstream license and source links', funct
         ->assertDontSee('https://github.com/lineledger/lineledger', false)
         ->assertDontSeeText('Local Foundry Inc.');
 });
+
+test('the footer shows the running version without linking upstream', function () {
+    $user = User::factory()->create();
+
+    $version = (string) config('version.app');
+
+    $this
+        ->actingAs($user)
+        ->get(route('dashboard'))
+        ->assertOk()
+        ->assertSeeText('v'.$version)
+        ->assertDontSee('https://github.com/lineledger/lineledger/releases/tag/v'.$version, false);
+});
